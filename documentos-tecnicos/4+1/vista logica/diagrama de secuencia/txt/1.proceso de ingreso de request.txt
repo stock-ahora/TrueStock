@@ -1,0 +1,28 @@
+title 1. Proceso de ingreso de request
+
+participant App Móvil
+participant Lambda Autorizadora
+participant Api Stock
+participant RabbitMQ
+participant DB
+participant S3
+
+    App Móvil->>Lambda Autorizadora: Solicitud POST /api/v1/stock/request
+    note right of App Móvil: \nHeaders:\n- Authorization: Bearer <jwt>\n\nBody (multipart/form-data):\n- file=@captura.png\n- type="in"
+
+    note over Lambda Autorizadora,Api Stock: Validación de cabeceras y token JWT
+
+    Lambda Autorizadora->>Api Stock: Forward de request validada
+    note right of Lambda Autorizadora: \nHeaders:\n- X-Client-Account-Id: 8d1b88f0...\n\nBody (multipart/form-data):\n- file=@captura.png\n- type="in"
+
+    Api Stock->>S3: Envío de documento para almacenamiento
+    S3-->>Api Stock: Retorno de la key del objeto guardado\nEjemplo: requests/Captura_de_pantalla.png
+
+    Api Stock->>DB: Creación de un nuevo registro de request y documento\nSe actualizan las tablas correspondientes
+    DB-->>Api Stock: Confirmación de registros creados (OK)
+
+    Api Stock->>RabbitMQ: Envío de la request para procesamiento\nasíncrono de los documentos
+    RabbitMQ-->>Api Stock: Confirmación de mensaje encolado
+
+    Api Stock-->>App Móvil: Request generada con éxito\nCódigo de respuesta: 200 (OK)
+    note right of App Móvil: \nBody (application/json):\n{\n  "ID": "b65ba455-4430-4055-8993-6e7e91b46e04",\n  "ClientAccountID": "8d1b88f0-e5c7-4670-8bbb-3045f9ab3995",\n  "Status": "created",\n  "CreatedAt": "2025-09-28T12:51:53.011Z",\n  "UpdatedAt": "2025-09-28T12:51:53.288Z",\n  "MovementTypeId": 1,\n  "Documents": [ ... ]\n}
